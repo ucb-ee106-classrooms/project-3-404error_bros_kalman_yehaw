@@ -206,11 +206,32 @@ class DeadReckoning(Estimator):
         super().__init__(is_noisy)
         self.canvas_title = 'Dead Reckoning'
 
-    def update(self, _):
+    def update(self, i):
         if len(self.x_hat) > 0:
             # TODO: Your implementation goes here!
             # You may ONLY use self.u and self.x[0] for estimation
-            raise NotImplementedError
+
+            x_prev = self.x_hat[-1]
+            dt = self.dt
+
+            u_current = self.u[i]
+            thrust = u_current[0]
+            angular_input = u_current[1]
+
+            x_new   = x_prev[0] + x_prev[3] * dt
+            z_new   = x_prev[1] + x_prev[4] * dt
+            phi_new = x_prev[2] + x_prev[5] * dt
+
+            xd_dot = - (thrust / self.m) * np.sin(x_prev[2])
+            zd_dot = (thrust / self.m) * np.cos(x_prev[2]) - self.gr
+            phid_dot = angular_input / self.J
+
+            x_dot_new   = x_prev[3] + xd_dot * dt
+            z_dot_new   = x_prev[4] + zd_dot * dt
+            phi_dot_new = x_prev[5] + phid_dot * dt
+
+            new_state = np.array([x_new, z_new, phi_new, x_dot_new, z_dot_new, phi_dot_new])
+            self.x_hat.append(new_state)
 
 # noinspection PyPep8Naming
 class ExtendedKalmanFilter(Estimator):
