@@ -1,0 +1,47 @@
+TODO
+velg 0,25m som height
+explain your motivation behind choosing your particular controller
+source devel/setup.bash
+source ~ee106b/sawyer_setup.bash
+
+source ~ee106b/sawyer_setup.bash && source devel/setup.bash
+
+roslaunch intera_examples sawyer_tuck.launch
+
+To run the robot
+./intera.sh [name-of-robot].local (connect to robot)
+rosrun intera_interface enable_robot.py -e (enable the robot)
+rosrun intera_interface joint_trajectory_action_server.py (before running trajectories)
+roslaunch sawyer_moveit_config sawyer_moveit.launch electric_gripper:=true
+roslaunch proj1_pkg sawyer_webcam_track.launch
+
+if funny error about tf2 python -c "import tf2_ros"
+
+python src/proj1_pkg/scripts/follow_ar.py -ar 12 -c jointspace -a right --log
+
+python src/proj1_pkg/scr2.260ipts/run_trajectories.py -task circle -ar_marker 12 -c jointspace --log
+
+
+
+Project 2
+roslaunch proj2_pkg init_env.launch map:=empty.yaml start_position:="1 1 0"
+python main.py -planner sin -x 1 -y 0.5 -theta 0 -phi 0
+
+
+TERMINAL 1
+source devel/setup.bash
+roscore
+
+TERMINAL 2
+source devel/setup.bash
+ssh apple@apple
+roslaunch turtlebot3_bringup turtlebot3_robot.launch --screen
+
+TERMINAL 3
+source devel/setup.bash
+roslaunch proj2_pkg init_env.launch fixed_frame:=odom robot_frame:=base_footprint sim:=false start_position:="0 0 0" turtlebot_command_topic:=/cmd_vel duration:=10000
+
+TERMINAL 4
+source devel/setup.bash
+cd /home/cc/ee106b/sp25/class/ee106b-abk/Documents/206B-projects/project-2/src/proj2_pkg/scripts
+python main.py -planner sin -x 1 -y 0.5 -theta 0 -phi 0
