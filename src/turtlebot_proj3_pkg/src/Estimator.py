@@ -250,7 +250,34 @@ class DeadReckoning(Estimator):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
             # TODO: Your implementation goes here!
             # You may ONLY use self.u and self.x[0] for estimation
-            raise NotImplementedError
+
+            t_current = self.x[-1][0]
+            x_hat_prev = self.x_hat[-1]
+
+            u_k = None
+            for input_data in self.u:
+                if input_data[0] <= t_current:
+                    u_k = input_data
+                else:
+                    break
+
+            if u_k is not None:
+                w_l = u_k[1]
+                w_r = u_k[2]
+
+                phi_prev = x_hat_prev[1]
+                x_prev   = x_hat_prev[2]
+                y_prev   = x_hat_prev[3]
+                thl_prev = x_hat_prev[4]
+                thr_prev = x_hat_prev[5]
+
+                phi_new = phi_prev + (self.r / (2 * self.d)) * (w_r - w_l) * self.dt
+                x_new   = x_prev + (self.r / 2) * (w_r + w_l) * np.cos(phi_prev) * self.dt
+                y_new   = y_prev + (self.r / 2) * (w_r + w_l) * np.sin(phi_prev) * self.dt
+                thl_new = thl_prev + w_l * self.dt
+                thr_new = thr_prev + w_r * self.dt
+
+                self.x_hat.append([t_current, phi_new, x_new, y_new, thl_new, thr_new])
 
 
 class KalmanFilter(Estimator):
