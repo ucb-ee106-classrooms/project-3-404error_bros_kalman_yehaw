@@ -306,16 +306,59 @@ class KalmanFilter(Estimator):
         super().__init__()
         self.canvas_title = 'Kalman Filter'
         self.phid = np.pi / 4
-        # TODO: Your implementation goes here!
-        # You may define the A, C, Q, R, and P matrices below.
+
+        self.A = np.eye(3)
+        alpha = self.r / (2 * self.d)
+        beta = self.r / 2
+        self.B = np.array([
+            [-alpha * self.dt,  alpha * self.dt],
+            [ beta * np.cos(self.phid) * self.dt, beta * np.cos(self.phid) * self.dt],
+            [ beta * np.sin(self.phid) * self.dt, beta * np.sin(self.phid) * self.dt]
+        ])
+        self.C = np.array([
+            [0, 1, 0],
+            [0, 0, 1]
+        ])
+        
+        self.Q = np.diag([1e-2, 1e-2, 1e-2])
+        self.R = np.diag([1e-2, 1e-2])
+        self.P = np.eye(3)
 
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
-            # TODO: Your implementation goes here!
-            # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+            t_current = self.x[-1][0]
+            x_hat_prev = self.x_hat[-1]
+            X_prev = np.array([x_hat_prev[1], x_hat_prev[2], x_hat_prev[3]])
+
+            u_k = None
+            for input_data in self.u:
+                if input_data[0] <= t_current:
+                    u_k = input_data
+                else:
+                    break
+
+            if u_k is not None:
+                u_vec = np.array([u_k[1], u_k[2]])
+                
+                X_pred = np.dot(self.A, X_prev) + np.dot(self.B, u_vec)
+                P_pred = np.dot(np.dot(self.A, self.P), self.A.T) + self.Q
+        
+                y_meas = self.y[-1]
+                z = np.array([y_meas[1], y_meas[2]])
+                
+                y_tilde = z - np.dot(self.C, X_pred)
+                S = np.dot(np.dot(self.C, P_pred), self.C.T) + self.R
+                K = np.dot(np.dot(P_pred, self.C.T), np.linalg.inv(S))
+                X_new = X_pred + np.dot(K, y_tilde)
+                P_new = np.dot((np.eye(3) - np.dot(K, self.C)), P_pred)
+                self.P = P_new
+
+                thl_new = x_hat_prev[4] + u_k[1] * self.dt
+                thr_new = x_hat_prev[5] + u_k[2] * self.dt
+                new_state = [t_current, X_new[0], X_new[1], X_new[2], thl_new, thr_new]
+                self.x_hat.append(new_state)
 
 
 # noinspection PyPep8Naming
