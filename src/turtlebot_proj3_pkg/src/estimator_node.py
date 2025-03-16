@@ -54,6 +54,11 @@ def main():
     rospy.loginfo('Invoking estimator {}...'.format(estimator_type))
     spin(estimator)
 
+    # Sum absolute position errors
+    estimation_error = estimator.get_estimation_error()
+    print(f'Sum of absolute position errors: {estimation_error}')
+
+    estimator.print_comp_times()
 
 if __name__ == '__main__':
     main()

@@ -2,6 +2,7 @@ import rospy
 from std_msgs.msg import Float32MultiArray
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 plt.rcParams['font.family'] = ['FreeSans', 'Helvetica', 'Arial']
 plt.rcParams['font.size'] = 14
 
@@ -77,6 +78,8 @@ class Estimator:
         self.x = []
         self.y = []
         self.x_hat = []  # Your estimates go here!
+        self.errrors = []
+        self.comptimes = []
         self.dt = 0.1
         self.fig, self.axd = plt.subplot_mosaic(
             [['xy', 'phi'],
@@ -115,6 +118,25 @@ class Estimator:
 
     def update(self, _):
         raise NotImplementedError
+    
+    def get_estimation_error(self):
+        return np.sum(self.errrors)
+    
+    def print_comp_times(self):
+        for timestamp in self.comptimes:
+            print(f'timestep: {timestamp}')
+        print(f'Average computation time: {np.mean(self.comptimes) * 1000} ms')
+
+        # Plot computation times in milliseconds
+        plt.figure(figsize=(10, 5))
+        plt.plot([t * 1000 for t in self.comptimes], marker='o', linestyle='-', color='b', label='Computational time (ms)')
+        plt.axhline(np.mean(self.comptimes) * 1000, color='r', linestyle='--', label=f'Average time: {(np.mean(self.comptimes) * 1000):.2f} ms')
+        plt.title(f'Per-step computational running time using {self.canvas_title} on the TurtleBot')
+        plt.xlabel('Update step')
+        plt.ylabel('Computational time (ms)')
+        plt.legend()
+        plt.grid()
+        plt.show()
 
     def plot_init(self):
         self.axd['xy'].set_title(self.canvas_title)
@@ -250,7 +272,7 @@ class DeadReckoning(Estimator):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
             # TODO: Your implementation goes here!
             # You may ONLY use self.u and self.x[0] for estimation
-
+            start_time = time.time()
             t_current = self.x[-1][0]
             x_hat_prev = self.x_hat[-1]
 
@@ -277,8 +299,14 @@ class DeadReckoning(Estimator):
                 thl_new = thl_prev + w_l * self.dt
                 thr_new = thr_prev + w_r * self.dt
 
+                # Measure the difference between the estimated and true position
+                error = np.linalg.norm(np.array(self.x[-1][2:4]) - np.array([x_new, y_new]))
+                self.errrors.append(error)
+
                 self.x_hat.append([t_current, phi_new, x_new, y_new, thl_new, thr_new])
 
+                end_time = time.time()
+                self.comptimes.append(end_time - start_time)
 
 class KalmanFilter(Estimator):
     """Kalman filter estimator.
@@ -327,6 +355,8 @@ class KalmanFilter(Estimator):
     # noinspection DuplicatedCode
     # noinspection PyPep8Naming
     def update(self, _):
+        start_time = time.time()
+
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
             t_current = self.x[-1][0]
             x_hat_prev = self.x_hat[-1]
@@ -357,8 +387,16 @@ class KalmanFilter(Estimator):
 
                 thl_new = x_hat_prev[4] + u_k[1] * self.dt
                 thr_new = x_hat_prev[5] + u_k[2] * self.dt
+
+                # Measure the difference between the estimated and true position
+                error = np.linalg.norm(np.array(self.x[-1][2:4]) - np.array([X_new[1], X_new[2]]))
+                self.errrors.append(error)
+
                 new_state = [t_current, X_new[0], X_new[1], X_new[2], thl_new, thr_new]
                 self.x_hat.append(new_state)
+
+                end_time = time.time()
+                self.comptimes.append(end_time - start_time)
 
 
 # noinspection PyPep8Naming
