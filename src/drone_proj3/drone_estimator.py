@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 plt.rcParams['font.family'] = ['Arial']
 plt.rcParams['font.size'] = 14
-
+import time
 
 class Estimator:
     """A base class to represent an estimator.
@@ -56,6 +56,8 @@ class Estimator:
         self.x = []
         self.y = []
         self.x_hat = []  # Your estimates go here!
+        self.errrors = []
+        self.comptimes = []
         self.t = []
         self.fig, self.axd = plt.subplot_mosaic(
             [['xz', 'phi'],
@@ -104,6 +106,25 @@ class Estimator:
 
     def update(self, _):
         raise NotImplementedError
+    
+    def get_estimation_error(self):
+        return np.sum(self.errrors)
+    
+    def print_comp_times(self):
+        for timestamp in self.comptimes:
+            print(f'timestep: {timestamp}')
+        print(f'Average computation time: {np.mean(self.comptimes) * 1000} ms')
+
+        # Plot computation times in milliseconds
+        plt.figure(figsize=(10, 5))
+        plt.plot([t * 1000 for t in self.comptimes][1:], marker='o', linestyle='-', color='b', label='Computational time (ms)')
+        plt.axhline(np.mean(self.comptimes) * 1000, color='r', linestyle='--', label=f'Average time: {(np.mean(self.comptimes) * 1000):.2f} ms')
+        plt.title(f'Per-step computational running time using {self.canvas_title} on the Quadrotor')
+        plt.xlabel('Update step')
+        plt.ylabel('Computational time (ms)')
+        plt.legend()
+        plt.grid()
+        plt.show()
 
     def plot_init(self):
         self.axd['xz'].set_title(self.canvas_title)
@@ -210,6 +231,7 @@ class DeadReckoning(Estimator):
         if len(self.x_hat) > 0:
             # TODO: Your implementation goes here!
             # You may ONLY use self.u and self.x[0] for estimation
+            start_time = time.time()
 
             x_prev = self.x_hat[-1]
             dt = self.dt
@@ -230,8 +252,15 @@ class DeadReckoning(Estimator):
             z_dot_new   = x_prev[4] + zd_dot * dt
             phi_dot_new = x_prev[5] + phid_dot * dt
 
+            # Measure the difference between the estimated and true position
+            error = np.linalg.norm(np.array(self.x[-1][0:2]) - np.array([x_new, z_new]))
+            self.errrors.append(error)
+
             new_state = np.array([x_new, z_new, phi_new, x_dot_new, z_dot_new, phi_dot_new])
             self.x_hat.append(new_state)
+
+            end_time = time.time()
+            self.comptimes.append(end_time - start_time)
 
 # noinspection PyPep8Naming
 class ExtendedKalmanFilter(Estimator):
