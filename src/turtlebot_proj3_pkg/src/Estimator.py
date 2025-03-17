@@ -123,8 +123,6 @@ class Estimator:
         return np.sum(self.errrors)
     
     def print_comp_times(self):
-        for timestamp in self.comptimes:
-            print(f'timestep: {timestamp}')
         print(f'Average computation time: {np.mean(self.comptimes) * 1000} ms')
 
         # Plot computation times in milliseconds
