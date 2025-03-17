@@ -111,8 +111,6 @@ class Estimator:
         return np.sum(self.errrors)
     
     def print_comp_times(self):
-        for timestamp in self.comptimes:
-            print(f'timestep: {timestamp}')
         print(f'Average computation time: {np.mean(self.comptimes) * 1000} ms')
 
         # Plot computation times in milliseconds
@@ -251,7 +249,6 @@ class DeadReckoning(Estimator):
             phi_next = phi + phi_dot * self.dt
 
             x_dot_dot      = -u1 * np.sin(phi) * (1 / self.m)
-            z_dot_dot      = (u1 / self.m) * np.cos(phi) - self.gr
             z_dot_dot      = -self.gr + u1 * np.cos(phi) * (1 / self.m)
             phi_dot_dot    = u2 * (1 / self.J)
 
@@ -299,35 +296,37 @@ class ExtendedKalmanFilter(Estimator):
         super().__init__(is_noisy)
         self.canvas_title = 'Extended Kalman Filter'
         # TODO: Your implementation goes here!
-        # You may define the Q, R, and P matrices below.
-        self.A = None
-        # self.B = None
-        self.C = None
         self.Q = np.eye(6) * 0.01
-        self.R = np.eye(2) * 10
-        self.P = np.eye(6) * 0.01
+        self.R = np.diag([10, 1])
+        self.P = np.eye(6) * 0
 
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
+            start_time = time.time()
             
             state = self.g(i)
 
-            A_next = self.approx_A(state, self.u, i)
+            A = self.approx_A(state, self.u, i)
 
-            self.P = A_next @ self.P @ A_next.T + self.Q
+            self.P = A @ self.P @ A.T + self.Q
 
-            C_next = self.approx_C(state)
+            C = self.approx_C(state)
 
-            K = self.P @ C_next.T @ np.linalg.inv(C_next @ self.P @ C_next.T + self.R)
+            K = self.P @ C.T @ np.linalg.inv(C @ self.P @ C.T + self.R)
 
             state_next = state + K @ (self.y[i] - self.h(state))
 
-            self.P = (np.eye(6) - K @ C_next) @ self.P
+            self.P = (np.eye(6) - K @ C) @ self.P
 
             self.x_hat.append(state_next)
 
+            # Measure the difference between the estimated and true position
+            error = np.linalg.norm(np.array(self.x[-1][0:2]) - np.array([state_next[0], state_next[1]]))
+            self.errrors.append(error)
 
+            end_time = time.time()
+            self.comptimes.append(end_time - start_time)
 
     def g(self, i):
         state_current = self.x_hat[-1]
@@ -363,9 +362,10 @@ class ExtendedKalmanFilter(Estimator):
         phi = state[2]
         
         lx = self.landmark[0]
+        ly = self.landmark[1]
         lz = self.landmark[2]
     
-        r = np.sqrt((lx - x)**2 + (lz - z)**2)
+        r = np.sqrt((lx - x)**2 + ly**2 + (lz - z)**2)
         
         return np.array([r, phi])
 
@@ -373,8 +373,8 @@ class ExtendedKalmanFilter(Estimator):
         u1 = u[i][0]
         phi = state[2]
 
-        a34 = -u1 * (1 / self.m) * np.sin(phi) * self.dt
-        a35 = -u1 * (1 / self.m) * np.cos(phi) * self.dt
+        a34 = -u1 * (1 / self.m) * np.sin(phi) * self.dt # Also works with np.cos(phi)
+        a35 = -u1 * (1 / self.m) * np.cos(phi) * self.dt # Also works with np.sin(phi)
 
         A = np.array([
             [1, 0, 0, self.dt, 0, 0],
@@ -392,9 +392,10 @@ class ExtendedKalmanFilter(Estimator):
         z = state[1]
 
         lx = self.landmark[0]
+        ly = self.landmark[1]
         lz = self.landmark[2]
-
-        r = np.sqrt((x - lx)**2 + (z - lz)**2)
+    
+        r = np.sqrt((lx - x)**2 + ly**2 + (lz - z)**2)
 
         c11 = (x - lx) * (1 / r)
         c12 = (z - lz) * (1 / r)
