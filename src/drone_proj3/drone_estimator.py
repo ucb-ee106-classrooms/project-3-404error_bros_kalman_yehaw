@@ -295,7 +295,7 @@ class ExtendedKalmanFilter(Estimator):
     To run the extended Kalman filter:
         $ python drone_estimator_node.py --estimator extended_kalman_filter
     """
-    def __init__(self, is_noisy=False):
+    def __init__(self, is_noisy=True):
         super().__init__(is_noisy)
         self.canvas_title = 'Extended Kalman Filter'
         # TODO: Your implementation goes here!
@@ -304,21 +304,20 @@ class ExtendedKalmanFilter(Estimator):
         # self.B = None
         self.C = None
         self.Q = np.eye(6) * 0.01
-        self.R = np.eye(2) * 0.1
-        self.P = np.eye(6) * 0
+        self.R = np.eye(2) * 10
+        self.P = np.eye(6) * 0.01
 
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
             
-            # self.x_hat.append(self.x[0]) # Initialize the first state
             state = self.g(i)
 
             A_next = self.approx_A(state, self.u, i)
 
             self.P = A_next @ self.P @ A_next.T + self.Q
 
-            C_next = self.approx_C(state, i)
+            C_next = self.approx_C(state)
 
             K = self.P @ C_next.T @ np.linalg.inv(C_next @ self.P @ C_next.T + self.R)
 
@@ -349,7 +348,6 @@ class ExtendedKalmanFilter(Estimator):
         phi_next = phi + phi_dot * self.dt
 
         x_dot_dot      = -u1 * np.sin(phi) * (1 / self.m)
-        z_dot_dot      = (u1 / self.m) * np.cos(phi) - self.gr
         z_dot_dot      = -self.gr + u1 * np.cos(phi) * (1 / self.m)
         phi_dot_dot    = u2 * (1 / self.J)
 
@@ -364,24 +362,19 @@ class ExtendedKalmanFilter(Estimator):
         z = state[1]
         phi = state[2]
         
-        # Use the landmark coordinates.
-        lx = self.landmark[1]
+        lx = self.landmark[0]
         lz = self.landmark[2]
+    
+        r = np.sqrt((lx - x)**2 + (lz - z)**2)
         
-        # Compute expected range.
-        r = np.sqrt((x - lx)**2 + (z - lz)**2)
-        
-        # Compute expected bearing.
-        theta = np.arctan2(lz - z, lx - x) - phi
-        
-        return np.array([r, theta])
+        return np.array([r, phi])
 
     def approx_A(self, state, u, i):
         u1 = u[i][0]
         phi = state[2]
 
-        a34 = -u1 * (1 / self.m) * np.cos(phi) * self.dt
-        a35 = -u1 * (1 / self.m) * np.sin(phi) * self.dt
+        a34 = -u1 * (1 / self.m) * np.sin(phi) * self.dt
+        a35 = -u1 * (1 / self.m) * np.cos(phi) * self.dt
 
         A = np.array([
             [1, 0, 0, self.dt, 0, 0],
@@ -394,30 +387,21 @@ class ExtendedKalmanFilter(Estimator):
 
         return A
     
-    def approx_C(self, state, i):
+    def approx_C(self, state):
         x = state[0]
         z = state[1]
-        # Using landmark: if landmark is defined as (0, 5, 5) where:
-        # landmark[1] = l_x and landmark[2] = l_z:
-        lx = self.landmark[1]
+
+        lx = self.landmark[0]
         lz = self.landmark[2]
-        
-        # Compute the predicted range
+
         r = np.sqrt((x - lx)**2 + (z - lz)**2)
-        # Prevent division by zero
-        if r < 1e-4:
-            r = 1e-4
-        
-        # Initialize a 2x6 matrix
-        C = np.zeros((2, 6))
-        
-        # Range measurement derivative
-        C[0, 0] = (x - lx) / r
-        C[0, 1] = (z - lz) / r
-        
-        # Bearing measurement derivative
-        C[1, 0] = (lz - z) / (r**2)
-        C[1, 1] = (x - lx) / (r**2)
-        C[1, 2] = -1
-        
+
+        c11 = (x - lx) * (1 / r)
+        c12 = (z - lz) * (1 / r)
+
+        C = np.array([
+            [c11, c12, 0, 0, 0, 0],
+            [0, 0, 1, 0 , 0 , 0],
+        ])
+
         return C
