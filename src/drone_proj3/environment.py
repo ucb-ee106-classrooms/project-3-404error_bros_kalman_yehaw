@@ -9,7 +9,7 @@ class Landmark:
         self.pos = np.array([x, y, z])
 
 class Environment:
-    def __init__(self, dynamics, controller, landmark, observer = None, is_noise = False):
+    def __init__(self, dynamics, controller, landmark, observer = None, is_noise = True): #satte til ture
         """
         Initializes a simulation environment
         Args:

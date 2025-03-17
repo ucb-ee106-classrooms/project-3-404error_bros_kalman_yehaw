@@ -268,7 +268,7 @@ class DeadReckoning(Estimator):
         super().__init__()
         self.canvas_title = 'Dead Reckoning'
 
-    def update(self, _):
+    def update(self, i):
         if len(self.x_hat) > 0 and self.x_hat[-1][0] < self.x[-1][0]:
             # TODO: Your implementation goes here!
             # You may ONLY use self.u and self.x[0] for estimation

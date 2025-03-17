@@ -233,31 +233,38 @@ class DeadReckoning(Estimator):
             # You may ONLY use self.u and self.x[0] for estimation
             start_time = time.time()
 
-            x_prev = self.x_hat[-1]
-            dt = self.dt
-
+            state_current = self.x_hat[-1]
             u_current = self.u[i]
-            thrust = u_current[0]
-            angular_input = u_current[1]
 
-            x_new   = x_prev[0] + x_prev[3] * dt
-            z_new   = x_prev[1] + x_prev[4] * dt
-            phi_new = x_prev[2] + x_prev[5] * dt
+            x = state_current[0]
+            z = state_current[1]
+            phi = state_current[2]
+            x_dot = state_current[3]
+            z_dot = state_current[4]
+            phi_dot = state_current[5]        
 
-            xd_dot = - (thrust / self.m) * np.sin(x_prev[2])
-            zd_dot = (thrust / self.m) * np.cos(x_prev[2]) - self.gr
-            phid_dot = angular_input / self.J
+            u1 = u_current[0]
+            u2 = u_current[1]
 
-            x_dot_new   = x_prev[3] + xd_dot * dt
-            z_dot_new   = x_prev[4] + zd_dot * dt
-            phi_dot_new = x_prev[5] + phid_dot * dt
+            x_next   = x + x_dot * self.dt
+            z_next   = z + z_dot * self.dt
+            phi_next = phi + phi_dot * self.dt
+
+            x_dot_dot      = -u1 * np.sin(phi) * (1 / self.m)
+            z_dot_dot      = (u1 / self.m) * np.cos(phi) - self.gr
+            z_dot_dot      = -self.gr + u1 * np.cos(phi) * (1 / self.m)
+            phi_dot_dot    = u2 * (1 / self.J)
+
+            x_dot_next   = x_dot + x_dot_dot * self.dt
+            z_dot_next   = z_dot + z_dot_dot * self.dt
+            phi_dot_next = phi_dot + phi_dot_dot * self.dt
+
+            new_state = np.array([x_next, z_next, phi_next, x_dot_next, z_dot_next, phi_dot_next])
+            self.x_hat.append(new_state)
 
             # Measure the difference between the estimated and true position
-            error = np.linalg.norm(np.array(self.x[-1][0:2]) - np.array([x_new, z_new]))
+            error = np.linalg.norm(np.array(self.x[-1][0:2]) - np.array([x_next, z_next]))
             self.errrors.append(error)
-
-            new_state = np.array([x_new, z_new, phi_new, x_dot_new, z_dot_new, phi_dot_new])
-            self.x_hat.append(new_state)
 
             end_time = time.time()
             self.comptimes.append(end_time - start_time)
@@ -294,27 +301,123 @@ class ExtendedKalmanFilter(Estimator):
         # TODO: Your implementation goes here!
         # You may define the Q, R, and P matrices below.
         self.A = None
-        self.B = None
+        # self.B = None
         self.C = None
-        self.Q = None
-        self.R = None
-        self.P = None
+        self.Q = np.eye(6) * 0.01
+        self.R = np.eye(2) * 0.1
+        self.P = np.eye(6) * 0
 
     # noinspection DuplicatedCode
     def update(self, i):
         if len(self.x_hat) > 0: #and self.x_hat[-1][0] < self.x[-1][0]:
-            # TODO: Your implementation goes here!
-            # You may use self.u, self.y, and self.x[0] for estimation
-            raise NotImplementedError
+            
+            # self.x_hat.append(self.x[0]) # Initialize the first state
+            state = self.g(i)
 
-    def g(self, x, u):
-        raise NotImplementedError
+            A_next = self.approx_A(state, self.u, i)
 
-    def h(self, x, y_obs):
-        raise NotImplementedError
+            self.P = A_next @ self.P @ A_next.T + self.Q
 
-    def approx_A(self, x, u):
-        raise NotImplementedError
+            C_next = self.approx_C(state, i)
+
+            K = self.P @ C_next.T @ np.linalg.inv(C_next @ self.P @ C_next.T + self.R)
+
+            state_next = state + K @ (self.y[i] - self.h(state))
+
+            self.P = (np.eye(6) - K @ C_next) @ self.P
+
+            self.x_hat.append(state_next)
+
+
+
+    def g(self, i):
+        state_current = self.x_hat[-1]
+        u_current = self.u[i]
+
+        x = state_current[0]
+        z = state_current[1]
+        phi = state_current[2]
+        x_dot = state_current[3]
+        z_dot = state_current[4]
+        phi_dot = state_current[5]        
+
+        u1 = u_current[0]
+        u2 = u_current[1]
+
+        x_next   = x + x_dot * self.dt
+        z_next   = z + z_dot * self.dt
+        phi_next = phi + phi_dot * self.dt
+
+        x_dot_dot      = -u1 * np.sin(phi) * (1 / self.m)
+        z_dot_dot      = (u1 / self.m) * np.cos(phi) - self.gr
+        z_dot_dot      = -self.gr + u1 * np.cos(phi) * (1 / self.m)
+        phi_dot_dot    = u2 * (1 / self.J)
+
+        x_dot_next   = x_dot + x_dot_dot * self.dt
+        z_dot_next   = z_dot + z_dot_dot * self.dt
+        phi_dot_next = phi_dot + phi_dot_dot * self.dt
+
+        return np.array([x_next, z_next, phi_next, x_dot_next, z_dot_next, phi_dot_next])
+
+    def h(self, state):
+        x = state[0]
+        z = state[1]
+        phi = state[2]
+        
+        # Use the landmark coordinates.
+        lx = self.landmark[1]
+        lz = self.landmark[2]
+        
+        # Compute expected range.
+        r = np.sqrt((x - lx)**2 + (z - lz)**2)
+        
+        # Compute expected bearing.
+        theta = np.arctan2(lz - z, lx - x) - phi
+        
+        return np.array([r, theta])
+
+    def approx_A(self, state, u, i):
+        u1 = u[i][0]
+        phi = state[2]
+
+        a34 = -u1 * (1 / self.m) * np.cos(phi) * self.dt
+        a35 = -u1 * (1 / self.m) * np.sin(phi) * self.dt
+
+        A = np.array([
+            [1, 0, 0, self.dt, 0, 0],
+            [0, 1, 0, 0, self.dt, 0],
+            [0, 0, 1, 0, 0, self.dt],
+            [0, 0, a34, 1, 0, 0],
+            [0, 0, a35, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1]
+        ])
+
+        return A
     
-    def approx_C(self, x):
-        raise NotImplementedError
+    def approx_C(self, state, i):
+        x = state[0]
+        z = state[1]
+        # Using landmark: if landmark is defined as (0, 5, 5) where:
+        # landmark[1] = l_x and landmark[2] = l_z:
+        lx = self.landmark[1]
+        lz = self.landmark[2]
+        
+        # Compute the predicted range
+        r = np.sqrt((x - lx)**2 + (z - lz)**2)
+        # Prevent division by zero
+        if r < 1e-4:
+            r = 1e-4
+        
+        # Initialize a 2x6 matrix
+        C = np.zeros((2, 6))
+        
+        # Range measurement derivative
+        C[0, 0] = (x - lx) / r
+        C[0, 1] = (z - lz) / r
+        
+        # Bearing measurement derivative
+        C[1, 0] = (lz - z) / (r**2)
+        C[1, 1] = (x - lx) / (r**2)
+        C[1, 2] = -1
+        
+        return C
